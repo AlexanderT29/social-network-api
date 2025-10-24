@@ -8,6 +8,8 @@ import (
 	"github.com/AlexanderT29/social-network-api/internal/store"
 )
 
+const version = "0.0.1"
+
 func main() {
 	cfg := config{
 		addr: ":8080",
