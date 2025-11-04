@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 )
 
 type Comment struct {
@@ -44,4 +45,72 @@ func (s *CommentStore) GetByPostID(ctx context.Context, postID int64) ([]Comment
 	}
 
 	return comments, nil
+}
+
+func (c *CommentStore) GetByCommentID(ctx context.Context, commentID int64) (*Comment, error) {
+	query := ` 
+	SELECT c.id, c.post_id, c.user_id, c.content, c.created_At, users.username, users.id FROM comments c
+	WHERE c.id = $1`
+
+	var comment Comment
+	err := c.db.QueryRowContext(ctx, query, commentID).Scan(
+		&comment.ID,
+		&comment.PostID,
+		&comment.UserID,
+		&comment.Content,
+		&comment.CreatedAt,
+		&comment.User,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &comment, nil
+}
+
+func (c *CommentStore) Create(ctx context.Context, comment *Comment) error {
+	query := `
+	INSERT INTO comments (post_id, user_id, content)
+	VALUES ($1, $2, $3) RETURNING id, created_at
+	`
+
+	err := c.db.QueryRowContext(ctx,
+		query,
+		comment.PostID,
+		comment.UserID,
+		comment.Content,
+	).Scan(
+		&comment.ID,
+		&comment.CreatedAt,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *CommentStore) Delete(ctx context.Context, commentID int64) error {
+	query := ` DELETE FROM comments WHERE id = $1`
+
+	res, err := c.db.ExecContext(ctx, query, commentID)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }
