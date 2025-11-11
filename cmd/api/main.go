@@ -1,8 +1,11 @@
 package main
 
 import (
+	"time"
+
 	"github.com/AlexanderT29/social-network-api/internal/db"
 	"github.com/AlexanderT29/social-network-api/internal/env"
+	"github.com/AlexanderT29/social-network-api/internal/mailer"
 	"github.com/AlexanderT29/social-network-api/internal/store"
 	"go.uber.org/zap"
 )
@@ -29,12 +32,21 @@ const version = "0.0.1"
 
 func main() {
 	cfg := config{
-		addr: ":8080",
+		addr:        ":8080",
+		frontendURL: env.GetString("FRONTEND_URL", "http://localhost:4000"),
 		db: dbConfig{
 			addr:         env.GetString("DB_ADDR", "postgres://admin:adminpassword@localhost/social-network-api?sslmode=disable"),
 			maxOpenConns: env.GetInt("DB_MAX_OPEN_CONNS", 30),
 			maxIdleConns: env.GetInt("DB_MAX_IDLE_CONNS", 30),
 			maxIdleTime:  env.GetString("DB_MAX_IDLE_TIME", "15m"),
+		},
+
+		mail: mailConfig{
+			exp:       time.Hour * 24 * 3, // 3 giorni per accettare l'invito
+			fromEmail: env.GetString("FROM_EMAIL", ""),
+			sendGrid: sendGridConfig{
+				apiKey: env.GetString("SENDGRID_API_KEY", ""),
+			},
 		},
 	}
 
@@ -56,10 +68,13 @@ func main() {
 
 	store := store.NewStorage(db)
 
+	mailer := mailer.NewSendgrid(cfg.mail.sendGrid.apiKey, cfg.mail.fromEmail)
+
 	app := &application{
 		config: cfg,
 		store:  store,
 		logger: logger,
+		mailer: mailer,
 	}
 
 	mux := app.mount()
